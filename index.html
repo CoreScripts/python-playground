@@ -14,8 +14,15 @@
   <!-- CodeMirror 6 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/theme/dracula.css" />
   <style>
-    body, html { height: 100%; margin: 0; }
-    #editor, #output { height: 100%; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* stop page scroll */
+      height: 100%;
+    }
+    #editor, #output {
+      height: 100%;
+    }
     pre span.stdout { color: #10b981; }  /* green */
     pre span.stderr { color: #ef4444; }  /* red */
   </style>
@@ -41,11 +48,11 @@
     }
   </script>
 </head>
-<body class="bg-gray-900 text-gray-200 h-screen flex flex-col p-2 select-none">
+<body class="bg-gray-900 text-gray-200 flex flex-col p-2 select-none">
 
   <h1 class="text-2xl font-bold mb-2 text-center">🐍 Python Playground</h1>
 
-  <div class="flex flex-1 gap-2 overflow-hidden">
+  <div id="mainContainer" class="flex flex-1 gap-2 overflow-hidden">
 
     <!-- Editor -->
     <div class="flex-1 flex flex-col bg-gray-800 rounded-lg p-2 overflow-hidden">
@@ -103,7 +110,15 @@
 
     clearBtn.onclick = () => { outputEl.innerHTML = ""; };
 
-    // Prevent zoom on double-tap in iOS
+    // --- Make it always fit iPad screen ---
+    function resizeToScreen() {
+      const vh = window.innerHeight;
+      document.getElementById("mainContainer").style.height = (vh - 60) + "px"; // leave space for header
+    }
+    window.addEventListener("resize", resizeToScreen);
+    resizeToScreen();
+
+    // Prevent zoom on iOS
     document.addEventListener("gesturestart", (e) => e.preventDefault());
     document.addEventListener("dblclick", (e) => e.preventDefault());
   </script>

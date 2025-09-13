@@ -17,14 +17,14 @@
     html, body {
       margin: 0;
       padding: 0;
-      overflow: hidden; /* stop page scroll */
       height: 100%;
+      overflow: hidden; /* stop global scroll */
     }
     #editor, #output {
       height: 100%;
     }
-    pre span.stdout { color: #10b981; }  /* green */
-    pre span.stderr { color: #ef4444; }  /* red */
+    pre span.stdout { color: #10b981; }  /* green text */
+    pre span.stderr { color: #ef4444; }  /* red error */
   </style>
 
   <script type="module">
@@ -39,16 +39,14 @@
         extensions: [basicSetup, lineNumbers(), python()]
       });
 
-      const view = new EditorView({
+      return new EditorView({
         state: startState,
         parent: document.getElementById(parentId)
       });
-
-      return view;
-    }
+    };
   </script>
 </head>
-<body class="bg-gray-900 text-gray-200 flex flex-col p-2 select-none">
+<body class="bg-gray-900 text-gray-200 flex flex-col p-2">
 
   <h1 class="text-2xl font-bold mb-2 text-center">🐍 Python Playground</h1>
 
@@ -75,12 +73,14 @@
   </div>
 
   <script type="module">
-    const editorView = window.createEditor('editor', `print("Hello World!")`);
+    // --- Setup CodeMirror ---
+    const editorView = window.createEditor('editor', `print("Hello from Python!")`);
 
     const outputEl = document.getElementById('output');
     const runBtn = document.getElementById('runBtn');
     const clearBtn = document.getElementById('clearBtn');
 
+    // --- Pyodide setup ---
     let pyodideReady = false;
     let pyodideInstance;
 
@@ -90,9 +90,9 @@
       pyodideReady = true;
       outputEl.textContent = "✅ Python loaded. Ready!";
     }
-
     loadPy();
 
+    // --- Run button ---
     runBtn.onclick = async () => {
       if (!pyodideReady) return;
       outputEl.innerHTML = `<span class="stdout">▶ Running...</span>\n`;
@@ -100,7 +100,7 @@
         const code = editorView.state.doc.toString();
         let logs = [];
         pyodideInstance.stdout = (msg) => logs.push(`<span class="stdout">${msg}</span>`);
-        pyodideInstance.stderr = (msg) => logs.push(`<span class="stderr">Error: ${msg}</span>`);
+        pyodideInstance.stderr = (msg) => logs.push(`<span class="stderr">${msg}</span>`);
         await pyodideInstance.runPythonAsync(code);
         outputEl.innerHTML = logs.join("\n");
       } catch (err) {
@@ -108,19 +108,23 @@
       }
     };
 
+    // --- Clear button ---
     clearBtn.onclick = () => { outputEl.innerHTML = ""; };
 
-    // --- Make it always fit iPad screen ---
+    // --- Always fit screen height ---
     function resizeToScreen() {
       const vh = window.innerHeight;
-      document.getElementById("mainContainer").style.height = (vh - 60) + "px"; // leave space for header
+      document.getElementById("mainContainer").style.height = (vh - 60) + "px";
     }
     window.addEventListener("resize", resizeToScreen);
     resizeToScreen();
 
-    // Prevent zoom on iOS
-    document.addEventListener("gesturestart", (e) => e.preventDefault());
-    document.addEventListener("dblclick", (e) => e.preventDefault());
+    // --- Kill ALL zoom behaviors on iPad ---
+    document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
+    document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+    document.addEventListener("touchstart", function preventZoom(e) {
+      if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
   </script>
 </body>
 </html>

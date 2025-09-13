@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Python Playground</title>
+  <meta charset="utf-8" />
+  <!-- Prevent most zooming; Safari sometimes ignores it, so we also use font-size >=16px and touch handlers -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Python Playground — Versioned</title>
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -12,138 +12,261 @@
   <!-- Pyodide -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 
-  <!-- CodeMirror 6 core CSS -->
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/dist/codemirror.css" />
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/theme/dracula.css" />
+  <!-- CodeMirror6 theme (only theme) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.0.1/theme.css" />
 
   <style>
+    :root { --vh: 1vh; } /* will be updated by JS for iOS toolbar fix */
     html, body {
+      height: 100%;
       margin: 0;
       padding: 0;
-      height: 100%;
-      overflow: hidden; /* disable global scroll */
-      touch-action: manipulation; /* stop pinch-zoom */
+      overflow: hidden; /* disable global page scrolling */
+      -webkit-user-select: text;
+      touch-action: manipulation; /* help prevent pinch/zoom */
+      -ms-touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(0,0,0,0);
     }
-    #editor, #output {
-      height: 100%;
+
+    /* layout sizes: header (56px) + container uses remaining */
+    body { display: flex; flex-direction: column; background: #0f172a; color: #e5e7eb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    header { height: 56px; flex: 0 0 56px; display:flex; align-items:center; justify-content:center; position:relative; }
+    main { height: calc(var(--vh, 1vh) * 100 - 56px); display:flex; gap:12px; padding:12px; box-sizing:border-box; }
+
+    /* version badge top-left */
+    .version-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      background: rgba(17,24,39,0.85);
+      color: #a3e635;
+      font-weight: 700;
+      padding: 6px 8px;
+      border-radius: 8px;
+      font-size: 13px;
+      border: 1px solid rgba(163,230,53,0.15);
+      z-index: 60;
+      user-select: none;
+      pointer-events: none;
     }
-    .cm-editor {
-      height: 100%;
-      font-size: 16px; /* >=16px prevents Safari zoom on focus */
+
+    /* containers */
+    .panel { flex:1; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; background: #0b1220; box-shadow: 0 6px 20px rgba(2,6,23,0.6); }
+    .panel .title { padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.03); color: #e6eef8; font-weight:600; }
+    .panel .body { flex:1; overflow:auto; padding:10px; }
+
+    /* CodeMirror minimal styling so it is usable if CDN doesn't supply */
+    .cm-editor { height:100%; font-size:16px; } /* 16px prevents Safari auto-zoom on focus */
+    .cm-scroller { height:100%; overflow:auto; padding:6px 12px; box-sizing:border-box; }
+    .cm-content { outline: none; white-space: pre; }
+    .cm-gutters { background: transparent; border-right: 1px solid rgba(255,255,255,0.03); padding-right:8px; }
+
+    /* fallback textarea */
+    #fallback {
+      width:100%;
+      height:100%;
+      resize:none;
+      background:#0b1220;
+      color:#e6eef8;
+      border:0;
+      outline: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+      font-size:16px; /* keep >=16 to avoid zoom */
+      padding:8px;
+      box-sizing:border-box;
     }
-    pre span.stdout { color: #10b981; }  /* green */
-    pre span.stderr { color: #ef4444; }  /* red */
+
+    /* output colors */
+    pre { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace; color:#d1fae5; }
+    .stdout { color:#4ade80; } /* green */
+    .stderr { color:#fb7185; } /* red */
+    .status { color:#60a5fa; } /* blue-ish */
   </style>
+</head>
+<body>
+  <header>
+    <div class="version-badge" id="verBadge">v0.0.0</div>
+    <h1 style="margin:0; font-size:16px; font-weight:700; letter-spacing:0.4px;">Python Playground</h1>
+  </header>
+
+  <main id="mainContainer">
+    <!-- Editor panel -->
+    <section class="panel">
+      <div class="title">
+        <div>Editor</div>
+        <div style="display:flex; gap:8px;">
+          <button id="runBtn" style="background:#16a34a; color:#071019; border-radius:6px; padding:6px 10px; font-weight:700; border:0;">Run ▶</button>
+          <button id="clearBtn" style="background:#ef4444; color:#071019; border-radius:6px; padding:6px 10px; font-weight:700; border:0;">Clear Output</button>
+        </div>
+      </div>
+      <div class="body" id="editorWrap">
+        <!-- CodeMirror will be mounted into this div. If it fails, the fallback textarea will appear. -->
+        <div id="editor" style="height:100%;"></div>
+        <textarea id="fallback" style="display:none;" spellcheck="false">print("Hello — fallback editor is active")</textarea>
+      </div>
+    </section>
+
+    <!-- Output panel -->
+    <section class="panel">
+      <div class="title"><div>Console Output</div><div id="statusSmall" style="opacity:0.85; font-weight:600;">Ready</div></div>
+      <div class="body">
+        <pre id="output" style="height:100%; white-space:pre-wrap;"></pre>
+      </div>
+    </section>
+  </main>
 
   <script type="module">
+    // ====== Version badge: random version string at top-left ======
+    function randomVersion() {
+      const a = Math.floor(Math.random()*10);
+      const b = Math.floor(Math.random()*20);
+      const c = Math.floor(Math.random()*100);
+      return `v${a}.${b}.${c}`;
+    }
+    document.getElementById('verBadge').textContent = randomVersion();
+
+    // ====== iOS 100vh fix (use --vh variable) ======
+    function setVh() {
+      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+    }
+    window.addEventListener('resize', setVh);
+    setVh();
+
+    // ====== Prevent pinch/double-tap zoom more aggressively ======
+    // font-size >=16px in editor/fallback helps prevent focus-zoom on iOS
+    document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
+    document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+    document.addEventListener("touchstart", function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+    // ====== Attempt to initialize CodeMirror 6; fallback to <textarea> if anything fails ======
     import { EditorView, basicSetup } from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.19.1/dist/index.js";
     import { EditorState } from "https://cdn.jsdelivr.net/npm/@codemirror/state@0.19.8/dist/index.js";
     import { lineNumbers } from "https://cdn.jsdelivr.net/npm/@codemirror/gutter@0.19.9/dist/index.js";
     import { python } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@0.19.7/dist/index.js";
 
-    window.createEditor = (parentId, initialCode) => {
-      const startState = EditorState.create({
-        doc: initialCode,
-        extensions: [basicSetup, lineNumbers(), python()]
-      });
-
-      return new EditorView({
-        state: startState,
-        parent: document.getElementById(parentId)
-      });
-    };
-  </script>
-</head>
-<body class="bg-gray-900 text-gray-200 flex flex-col p-2">
-
-  <h1 class="text-2xl font-bold mb-2 text-center">🐍 Python Playground</h1>
-
-  <div id="mainContainer" class="flex flex-1 gap-2 overflow-hidden">
-
-    <!-- Editor -->
-    <div class="flex-1 flex flex-col bg-gray-800 rounded-lg p-2 overflow-hidden">
-      <div class="flex justify-between mb-2">
-        <span class="font-semibold">Editor</span>
-        <div class="flex gap-2">
-          <button id="runBtn"
-                  class="bg-green-500 text-black px-3 py-1 rounded hover:bg-green-400">
-            Run ▶
-          </button>
-          <button id="clearBtn"
-                  class="bg-red-500 text-black px-3 py-1 rounded hover:bg-red-400">
-            Clear Output
-          </button>
-        </div>
-      </div>
-      <div id="editor" class="flex-1 rounded bg-gray-900 overflow-auto"></div>
-    </div>
-
-    <!-- Output -->
-    <div class="flex-1 flex flex-col bg-black rounded-lg p-2 overflow-hidden">
-      <div class="font-semibold mb-2">Console Output</div>
-      <pre id="output"
-           class="flex-1 overflow-auto whitespace-pre-wrap p-2 rounded"></pre>
-    </div>
-
-  </div>
-
-  <script type="module">
-    // Setup editor
-    const editorView = window.createEditor('editor', `print("Hello from Python!")`);
-
+    let editorView = null;
+    const editorDiv = document.getElementById('editor');
+    const fallback = document.getElementById('fallback');
     const outputEl = document.getElementById('output');
+    const statusSmall = document.getElementById('statusSmall');
     const runBtn = document.getElementById('runBtn');
     const clearBtn = document.getElementById('clearBtn');
 
-    // Pyodide setup
+    function showFallback() {
+      console.warn('CodeMirror init failed — using fallback textarea.');
+      editorDiv.style.display = 'none';
+      fallback.style.display = 'block';
+      fallback.focus();
+    }
+
+    try {
+      const state = EditorState.create({
+        doc: `# Type here — CodeMirror 6 editor\nprint("Hello from Pyodide")\n`,
+        extensions: [basicSetup, lineNumbers(), python()]
+      });
+
+      editorView = new EditorView({
+        state,
+        parent: editorDiv
+      });
+
+      // ensure the editor's DOM gets a 16px font size to avoid iOS zoom
+      editorView.dom.style.fontSize = '16px';
+      // focusable
+      editorView.dom.tabIndex = 0;
+      // quick focus so user can type
+      setTimeout(()=> {
+        try { editorView.focus(); } catch {}
+      }, 120);
+
+    } catch (err) {
+      console.error('Editor init error:', err);
+      showFallback();
+    }
+
+    // ====== Pyodide loader and runner ======
     let pyodideReady = false;
-    let pyodideInstance;
+    let pyodide = null;
 
     async function loadPy() {
-      outputEl.textContent = "Loading Python...";
-      pyodideInstance = await loadPyodide({
-        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
-      });
-      pyodideReady = true;
-      outputEl.textContent = "✅ Python loaded. Ready!";
+      outputEl.innerHTML = '<span class="status">Loading Pyodide...</span>';
+      try {
+        pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
+        pyodideReady = true;
+        outputEl.innerHTML = '<span class="status">Pyodide loaded — ready.</span>';
+        statusSmall.textContent = 'Pyodide ready';
+      } catch (e) {
+        outputEl.innerHTML = `<span class="stderr">Pyodide failed to load: ${e}</span>`;
+        statusSmall.textContent = 'Pyodide failed';
+      }
     }
     loadPy();
 
-    // Run button
-    runBtn.onclick = async () => {
-      if (!pyodideReady) return;
-      outputEl.innerHTML = `<span class="stdout">▶ Running...</span>\n`;
-      try {
-        const code = editorView.state.doc.toString();
-        let logs = [];
-        pyodideInstance.stdout = (msg) => logs.push(`<span class="stdout">${msg}</span>`);
-        pyodideInstance.stderr = (msg) => logs.push(`<span class="stderr">${msg}</span>`);
-        await pyodideInstance.runPythonAsync(code);
-        outputEl.innerHTML = logs.join("\n");
-      } catch (err) {
-        outputEl.innerHTML += `<span class="stderr">Error: ${err}</span>\n`;
+    // Utility to get current code (editor or fallback)
+    function getCode() {
+      if (editorView) {
+        return editorView.state.doc.toString();
+      } else {
+        return fallback.value;
       }
-    };
-
-    // Clear button
-    clearBtn.onclick = () => { outputEl.innerHTML = ""; };
-
-    // Always fit screen height
-    function resizeToScreen() {
-      const vh = window.innerHeight;
-      document.getElementById("mainContainer").style.height = (vh - 60) + "px";
     }
-    window.addEventListener("resize", resizeToScreen);
-    resizeToScreen();
 
-    // Kill zoom on iPad (pinch + double tap)
-    document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
-    document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
-    document.addEventListener("touchstart", function preventZoom(e) {
-      if (e.touches.length > 1) e.preventDefault();
-    }, { passive: false });
+    // Run handler
+    runBtn.addEventListener('click', async () => {
+      if (!pyodideReady) {
+        outputEl.innerHTML = '<span class="stderr">Pyodide not ready yet.</span>';
+        return;
+      }
+      outputEl.innerHTML = '<span class="status">▶ Running...</span>\n';
+      statusSmall.textContent = 'Running';
+      try {
+        const code = getCode();
+        let logs = [];
+        // redirect stdout/stderr temporarily
+        const oldStdout = pyodide._module && pyodide._module.stdout;
+        const oldStderr = pyodide._module && pyodide._module.stderr;
+
+        pyodide.stdout = (msg) => logs.push(`<span class="stdout">${escapeHtml(msg)}</span>`);
+        pyodide.stderr = (msg) => logs.push(`<span class="stderr">${escapeHtml(msg)}</span>`);
+
+        await pyodide.runPythonAsync(code);
+
+        outputEl.innerHTML = logs.join('\n') || '<span class="status">(no output)</span>';
+        statusSmall.textContent = 'Ready';
+      } catch (err) {
+        outputEl.innerHTML += `<span class="stderr">Exception: ${escapeHtml(String(err))}</span>`;
+        statusSmall.textContent = 'Error';
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      outputEl.innerHTML = '';
+    });
+
+    // small HTML escape
+    function escapeHtml(s) {
+      return s.replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+
+    // If CodeMirror exists but keyboard doesn't focus on iPad, allow tapping the wrapper to focus
+    document.getElementById('editorWrap').addEventListener('click', (e) => {
+      if (editorView) {
+        try { editorView.focus(); } catch {}
+      } else {
+        fallback.focus();
+      }
+    });
+
+    // expose quick debug console on long-press (for testing)
+    let pressTimer = null;
+    document.body.addEventListener('touchstart', function(e) {
+      if (e.touches.length === 1) {
+        pressTimer = setTimeout(()=> {
+          console.log('Long press debug: editorView=', !!editorView, 'pyodideReady=', pyodideReady);
+        }, 800);
+      }
+    }, {passive:true});
+    document.body.addEventListener('touchend', function(e) { clearTimeout(pressTimer); }, {passive:true});
   </script>
 </body>
 </html>

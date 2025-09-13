@@ -4,38 +4,101 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Python Playground</title>
+
+  <!-- Tailwind for layout -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Pyodide -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
-</head>
-<body class="bg-gray-100 h-screen p-4">
-  <div class="grid grid-cols-2 gap-4 h-full">
-    <!-- Code Editor -->
-    <div class="flex flex-col">
-      <h2 class="text-lg font-bold mb-2">Python Code</h2>
-      <textarea id="code" class="flex-1 w-full rounded-lg border p-2 font-mono text-sm">print("Hello, World!")</textarea>
-      <button onclick="runCode()" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded-lg">Run ▶</button>
-    </div>
 
-    <!-- Output -->
-    <div class="flex flex-col">
-      <h2 class="text-lg font-bold mb-2">Output</h2>
-      <pre id="output" class="bg-black text-green-400 p-2 rounded-lg h-full overflow-auto"></pre>
-    </div>
-  </div>
+  <!-- CodeMirror 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.0.1/codemirror.min.css" />
+  <script type="module">
+    import {EditorState, basicSetup} from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.19.1/dist/index.js";
+    import {EditorView, keymap} from "https://cdn.jsdelivr.net/npm/@codemirror/view@0.19.40/dist/index.js";
+    import {python} from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@0.19.7/dist/index.js";
 
-  <script>
-    async function runCode() {
-      const code = document.getElementById("code").value;
-      const output = document.getElementById("output");
-      output.textContent = "Running...";
-      try {
-        const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
-        let result = await pyodide.runPythonAsync(code);
-        output.textContent = result ?? "";
-      } catch (err) {
-        output.textContent = "Error: " + err.message;
-      }
+    window.setupEditor = (textAreaId) => {
+      const startState = EditorState.create({
+        doc: document.getElementById(textAreaId).value,
+        extensions: [basicSetup, python()]
+      });
+
+      const view = new EditorView({
+        state: startState,
+        parent: document.getElementById(textAreaId + '-wrapper')
+      });
+
+      return view;
     }
   </script>
+
+</head>
+<body class="bg-gray-900 text-gray-200 h-screen flex flex-col p-2">
+
+  <h1 class="text-2xl font-bold mb-2 text-center">Python Playground</h1>
+
+  <div class="flex flex-col md:flex-row flex-1 gap-2">
+
+    <!-- Editor Section -->
+    <div class="flex-1 flex flex-col bg-gray-800 rounded-lg p-2">
+      <div class="flex justify-between mb-2">
+        <span class="font-semibold">Editor</span>
+        <div class="flex gap-2">
+          <button id="runBtn" class="bg-green-500 text-black px-3 py-1 rounded hover:bg-green-400">Run ▶</button>
+          <button id="clearBtn" class="bg-red-500 text-black px-3 py-1 rounded hover:bg-red-400">Clear Output</button>
+        </div>
+      </div>
+      <div id="editor-wrapper" class="flex-1 rounded bg-gray-900 overflow-auto"></div>
+    </div>
+
+    <!-- Output Section -->
+    <div class="flex-1 flex flex-col bg-black rounded-lg p-2">
+      <div class="font-semibold mb-2">Console Output</div>
+      <pre id="output" class="flex-1 overflow-auto whitespace-pre-wrap"></pre>
+    </div>
+
+  </div>
+
+  <script type="module">
+    // Setup CodeMirror
+    const editorView = setupEditor('editor');
+
+    const outputEl = document.getElementById('output');
+    const runBtn = document.getElementById('runBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    let pyodideReady = false;
+    let pyodideInstance;
+
+    async function loadPy() {
+      outputEl.textContent = "Loading Python...";
+      pyodideInstance = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
+      pyodideReady = true;
+      outputEl.textContent = "Python loaded. Ready!";
+    }
+
+    loadPy();
+
+    runBtn.onclick = async () => {
+      if (!pyodideReady) return;
+      outputEl.textContent = "Running...";
+      try {
+        const code = editorView.state.doc.toString();
+        // Capture stdout
+        pyodideInstance.stdout = (msg) => { outputEl.textContent += msg + "\n"; };
+        pyodideInstance.stderr = (msg) => { outputEl.textContent += "Error: " + msg + "\n"; };
+        outputEl.textContent = "";
+        await pyodideInstance.runPythonAsync(code);
+      } catch (err) {
+        outputEl.textContent += "Error: " + err + "\n";
+      }
+    };
+
+    clearBtn.onclick = () => {
+      outputEl.textContent = "";
+    };
+  </script>
+
 </body>
 </html>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Python Playground</title>
 
   <!-- Tailwind -->
@@ -11,17 +11,25 @@
   <!-- Pyodide -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 
-  <!-- CodeMirror 6 via CDN -->
+  <!-- CodeMirror 6 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/theme/dracula.css" />
+  <style>
+    body, html { height: 100%; margin: 0; }
+    #editor, #output { height: 100%; }
+    pre span.stdout { color: #10b981; }  /* green */
+    pre span.stderr { color: #ef4444; }  /* red */
+  </style>
+
   <script type="module">
     import { EditorView, basicSetup } from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.19.1/dist/index.js";
     import { EditorState } from "https://cdn.jsdelivr.net/npm/@codemirror/state@0.19.8/dist/index.js";
+    import { lineNumbers } from "https://cdn.jsdelivr.net/npm/@codemirror/gutter@0.19.9/dist/index.js";
     import { python } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@0.19.7/dist/index.js";
 
     window.createEditor = (parentId, initialCode) => {
       const startState = EditorState.create({
         doc: initialCode,
-        extensions: [basicSetup, python()]
+        extensions: [basicSetup, lineNumbers(), python()]
       });
 
       const view = new EditorView({
@@ -33,14 +41,14 @@
     }
   </script>
 </head>
-<body class="bg-gray-900 text-gray-200 h-screen flex flex-col p-2">
+<body class="bg-gray-900 text-gray-200 h-screen flex flex-col p-2 select-none">
 
-  <h1 class="text-2xl font-bold mb-2 text-center">Python Playground</h1>
+  <h1 class="text-2xl font-bold mb-2 text-center">🐍 Python Playground</h1>
 
-  <div class="flex flex-col md:flex-row flex-1 gap-2">
+  <div class="flex flex-1 gap-2 overflow-hidden">
 
     <!-- Editor -->
-    <div class="flex-1 flex flex-col bg-gray-800 rounded-lg p-2">
+    <div class="flex-1 flex flex-col bg-gray-800 rounded-lg p-2 overflow-hidden">
       <div class="flex justify-between mb-2">
         <span class="font-semibold">Editor</span>
         <div class="flex gap-2">
@@ -52,15 +60,15 @@
     </div>
 
     <!-- Output -->
-    <div class="flex-1 flex flex-col bg-black rounded-lg p-2">
+    <div class="flex-1 flex flex-col bg-black rounded-lg p-2 overflow-hidden">
       <div class="font-semibold mb-2">Console Output</div>
-      <pre id="output" class="flex-1 overflow-auto whitespace-pre-wrap"></pre>
+      <pre id="output" class="flex-1 overflow-auto whitespace-pre-wrap p-2 rounded"></pre>
     </div>
 
   </div>
 
   <script type="module">
-    const editorView = window.createEditor('editor', `print("Hello World")`);
+    const editorView = window.createEditor('editor', `print("Hello World!")`);
 
     const outputEl = document.getElementById('output');
     const runBtn = document.getElementById('runBtn');
@@ -73,27 +81,31 @@
       outputEl.textContent = "Loading Python...";
       pyodideInstance = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
       pyodideReady = true;
-      outputEl.textContent = "Python loaded. Ready!";
+      outputEl.textContent = "✅ Python loaded. Ready!";
     }
 
     loadPy();
 
     runBtn.onclick = async () => {
       if (!pyodideReady) return;
-      outputEl.textContent = "Running...\n";
+      outputEl.innerHTML = `<span class="stdout">▶ Running...</span>\n`;
       try {
         const code = editorView.state.doc.toString();
-        let stdout = "";
-        pyodideInstance.stdout = (msg) => { stdout += msg + "\n"; };
-        pyodideInstance.stderr = (msg) => { stdout += "Error: " + msg + "\n"; };
+        let logs = [];
+        pyodideInstance.stdout = (msg) => logs.push(`<span class="stdout">${msg}</span>`);
+        pyodideInstance.stderr = (msg) => logs.push(`<span class="stderr">Error: ${msg}</span>`);
         await pyodideInstance.runPythonAsync(code);
-        outputEl.textContent = stdout;
+        outputEl.innerHTML = logs.join("\n");
       } catch (err) {
-        outputEl.textContent += "Error: " + err + "\n";
+        outputEl.innerHTML += `<span class="stderr">Error: ${err}</span>\n`;
       }
     };
 
-    clearBtn.onclick = () => { outputEl.textContent = ""; };
+    clearBtn.onclick = () => { outputEl.innerHTML = ""; };
+
+    // Prevent zoom on double-tap in iOS
+    document.addEventListener("gesturestart", (e) => e.preventDefault());
+    document.addEventListener("dblclick", (e) => e.preventDefault());
   </script>
 </body>
 </html>

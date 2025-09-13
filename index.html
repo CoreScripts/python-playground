@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Python Playground</title>
 
   <!-- Tailwind -->
@@ -11,20 +12,29 @@
   <!-- Pyodide -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 
-  <!-- CodeMirror 6 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/theme/dracula.css" />
+  <!-- CodeMirror 6 core CSS -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/dist/codemirror.css" />
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/theme/dracula.css" />
+
   <style>
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
-      overflow: hidden; /* stop global scroll */
+      overflow: hidden; /* disable global scroll */
+      touch-action: manipulation; /* stop pinch-zoom */
     }
     #editor, #output {
       height: 100%;
     }
-    pre span.stdout { color: #10b981; }  /* green text */
-    pre span.stderr { color: #ef4444; }  /* red error */
+    .cm-editor {
+      height: 100%;
+      font-size: 16px; /* >=16px prevents Safari zoom on focus */
+    }
+    pre span.stdout { color: #10b981; }  /* green */
+    pre span.stderr { color: #ef4444; }  /* red */
   </style>
 
   <script type="module">
@@ -57,8 +67,14 @@
       <div class="flex justify-between mb-2">
         <span class="font-semibold">Editor</span>
         <div class="flex gap-2">
-          <button id="runBtn" class="bg-green-500 text-black px-3 py-1 rounded hover:bg-green-400">Run ▶</button>
-          <button id="clearBtn" class="bg-red-500 text-black px-3 py-1 rounded hover:bg-red-400">Clear Output</button>
+          <button id="runBtn"
+                  class="bg-green-500 text-black px-3 py-1 rounded hover:bg-green-400">
+            Run ▶
+          </button>
+          <button id="clearBtn"
+                  class="bg-red-500 text-black px-3 py-1 rounded hover:bg-red-400">
+            Clear Output
+          </button>
         </div>
       </div>
       <div id="editor" class="flex-1 rounded bg-gray-900 overflow-auto"></div>
@@ -67,32 +83,35 @@
     <!-- Output -->
     <div class="flex-1 flex flex-col bg-black rounded-lg p-2 overflow-hidden">
       <div class="font-semibold mb-2">Console Output</div>
-      <pre id="output" class="flex-1 overflow-auto whitespace-pre-wrap p-2 rounded"></pre>
+      <pre id="output"
+           class="flex-1 overflow-auto whitespace-pre-wrap p-2 rounded"></pre>
     </div>
 
   </div>
 
   <script type="module">
-    // --- Setup CodeMirror ---
+    // Setup editor
     const editorView = window.createEditor('editor', `print("Hello from Python!")`);
 
     const outputEl = document.getElementById('output');
     const runBtn = document.getElementById('runBtn');
     const clearBtn = document.getElementById('clearBtn');
 
-    // --- Pyodide setup ---
+    // Pyodide setup
     let pyodideReady = false;
     let pyodideInstance;
 
     async function loadPy() {
       outputEl.textContent = "Loading Python...";
-      pyodideInstance = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/" });
+      pyodideInstance = await loadPyodide({
+        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
+      });
       pyodideReady = true;
       outputEl.textContent = "✅ Python loaded. Ready!";
     }
     loadPy();
 
-    // --- Run button ---
+    // Run button
     runBtn.onclick = async () => {
       if (!pyodideReady) return;
       outputEl.innerHTML = `<span class="stdout">▶ Running...</span>\n`;
@@ -108,10 +127,10 @@
       }
     };
 
-    // --- Clear button ---
+    // Clear button
     clearBtn.onclick = () => { outputEl.innerHTML = ""; };
 
-    // --- Always fit screen height ---
+    // Always fit screen height
     function resizeToScreen() {
       const vh = window.innerHeight;
       document.getElementById("mainContainer").style.height = (vh - 60) + "px";
@@ -119,7 +138,7 @@
     window.addEventListener("resize", resizeToScreen);
     resizeToScreen();
 
-    // --- Kill ALL zoom behaviors on iPad ---
+    // Kill zoom on iPad (pinch + double tap)
     document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
     document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
     document.addEventListener("touchstart", function preventZoom(e) {

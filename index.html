@@ -5,34 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Python Playground</title>
 
-  <!-- Tailwind for layout -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Pyodide -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 
-  <!-- CodeMirror 6 -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.0.1/codemirror.min.css" />
+  <!-- CodeMirror 6 via CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/theme/dracula.css" />
   <script type="module">
-    import {EditorState, basicSetup} from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.19.1/dist/index.js";
-    import {EditorView, keymap} from "https://cdn.jsdelivr.net/npm/@codemirror/view@0.19.40/dist/index.js";
-    import {python} from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@0.19.7/dist/index.js";
+    import { EditorView, basicSetup } from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.19.1/dist/index.js";
+    import { EditorState } from "https://cdn.jsdelivr.net/npm/@codemirror/state@0.19.8/dist/index.js";
+    import { python } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@0.19.7/dist/index.js";
 
-    window.setupEditor = (textAreaId) => {
+    window.createEditor = (parentId, initialCode) => {
       const startState = EditorState.create({
-        doc: document.getElementById(textAreaId).value,
+        doc: initialCode,
         extensions: [basicSetup, python()]
       });
 
       const view = new EditorView({
         state: startState,
-        parent: document.getElementById(textAreaId + '-wrapper')
+        parent: document.getElementById(parentId)
       });
 
       return view;
     }
   </script>
-
 </head>
 <body class="bg-gray-900 text-gray-200 h-screen flex flex-col p-2">
 
@@ -40,7 +39,7 @@
 
   <div class="flex flex-col md:flex-row flex-1 gap-2">
 
-    <!-- Editor Section -->
+    <!-- Editor -->
     <div class="flex-1 flex flex-col bg-gray-800 rounded-lg p-2">
       <div class="flex justify-between mb-2">
         <span class="font-semibold">Editor</span>
@@ -49,10 +48,10 @@
           <button id="clearBtn" class="bg-red-500 text-black px-3 py-1 rounded hover:bg-red-400">Clear Output</button>
         </div>
       </div>
-      <div id="editor-wrapper" class="flex-1 rounded bg-gray-900 overflow-auto"></div>
+      <div id="editor" class="flex-1 rounded bg-gray-900 overflow-auto"></div>
     </div>
 
-    <!-- Output Section -->
+    <!-- Output -->
     <div class="flex-1 flex flex-col bg-black rounded-lg p-2">
       <div class="font-semibold mb-2">Console Output</div>
       <pre id="output" class="flex-1 overflow-auto whitespace-pre-wrap"></pre>
@@ -61,8 +60,7 @@
   </div>
 
   <script type="module">
-    // Setup CodeMirror
-    const editorView = setupEditor('editor');
+    const editorView = window.createEditor('editor', `print("Hello World")`);
 
     const outputEl = document.getElementById('output');
     const runBtn = document.getElementById('runBtn');
@@ -82,23 +80,20 @@
 
     runBtn.onclick = async () => {
       if (!pyodideReady) return;
-      outputEl.textContent = "Running...";
+      outputEl.textContent = "Running...\n";
       try {
         const code = editorView.state.doc.toString();
-        // Capture stdout
-        pyodideInstance.stdout = (msg) => { outputEl.textContent += msg + "\n"; };
-        pyodideInstance.stderr = (msg) => { outputEl.textContent += "Error: " + msg + "\n"; };
-        outputEl.textContent = "";
+        let stdout = "";
+        pyodideInstance.stdout = (msg) => { stdout += msg + "\n"; };
+        pyodideInstance.stderr = (msg) => { stdout += "Error: " + msg + "\n"; };
         await pyodideInstance.runPythonAsync(code);
+        outputEl.textContent = stdout;
       } catch (err) {
         outputEl.textContent += "Error: " + err + "\n";
       }
     };
 
-    clearBtn.onclick = () => {
-      outputEl.textContent = "";
-    };
+    clearBtn.onclick = () => { outputEl.textContent = ""; };
   </script>
-
 </body>
 </html>
